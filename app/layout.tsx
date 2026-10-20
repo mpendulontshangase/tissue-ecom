@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
       default: name,
       template: `%s · ${name}`,
     },
-    description: `${name} packs facial tissue into cartons of 24 and 48 boxes. Order in bulk and pay on delivery or by EFT. Prices in South African rand.`,
+    description: `${name} packs facial tissue into cartons of 24 and 48 boxes. Order in bulk and pay by card with Yoco, or by EFT. Prices in South African rand.`,
   };
 }
 

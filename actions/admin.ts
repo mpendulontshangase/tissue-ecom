@@ -7,16 +7,19 @@ import { requireAdmin, requireUser } from "@/lib/auth";
 import { getProductById } from "@/lib/catalog";
 import { STATUS_LABELS } from "@/lib/constants";
 import { getDb } from "@/lib/db";
-import { notifications, orderItems, orders, productImages, products, shopSettings, users } from "@/lib/db/schema";
+import { notifications, orderItems, orders, paymentSettings, productImages, products, shopSettings, users } from "@/lib/db/schema";
 import { orderLink, sendCustomerEmail } from "@/lib/email";
 import { isUuid, slugify } from "@/lib/format";
 import { imageSizeError, imageTypeError, MAX_PRODUCT_IMAGES } from "@/lib/image-limits";
+import { getPaymentConfig, getPaymentRow } from "@/lib/payment-config";
+import { encryptSecret } from "@/lib/secrets";
 import {
   fieldErrorsFrom,
   normalizeHttpsUrl,
   normalizePhone,
   normalizeWhatsapp,
   orderUpdateSchema,
+  paymentSettingsSchema,
   productSchema,
   randsToCents,
   shopSettingsSchema,
@@ -278,6 +281,113 @@ export async function saveShopSettings(_prev: ActionState, formData: FormData): 
 
   refresh();
   return { ok: "Shop settings saved" };
+}
+
+export async function savePaymentSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const current = await getPaymentConfig();
+  const parsed = paymentSettingsSchema.safeParse({
+    yocoEnabled: formData.get("yocoEnabled") === "on",
+    eftEnabled: formData.get("eftEnabled") === "on",
+    yocoPublicKey:
+      current.yocoPublicSource === "environment" ? current.yocoPublicKey : String(formData.get("yocoPublicKey") ?? ""),
+    yocoSecretKey: current.yocoSecretSource === "environment" ? "" : String(formData.get("yocoSecretKey") ?? ""),
+    yocoWebhookSecret: current.yocoWebhookSource === "environment" ? "" : String(formData.get("yocoWebhookSecret") ?? ""),
+    bankAccountName: formData.get("bankAccountName"),
+    bankName: formData.get("bankName"),
+    bankAccountNumber: formData.get("bankAccountNumber"),
+    bankBranchCode: formData.get("bankBranchCode"),
+    bankAccountType: formData.get("bankAccountType"),
+  });
+  if (!parsed.success) {
+    return { error: "Could not save payment settings.", fieldErrors: fieldErrorsFrom(parsed.error) };
+  }
+
+  const row = await getPaymentRow();
+  const secretStored = parsed.data.yocoSecretKey ? encryptSecret(parsed.data.yocoSecretKey) : row.yocoSecretKey;
+  const webhookStored = parsed.data.yocoWebhookSecret ? encryptSecret(parsed.data.yocoWebhookSecret) : row.yocoWebhookSecret;
+  const hasSecret = current.yocoSecretSource === "environment" || Boolean(parsed.data.yocoSecretKey) || Boolean(current.yocoSecretKey);
+  const hasPublic = Boolean(parsed.data.yocoPublicKey);
+  if (parsed.data.yocoEnabled && (!hasSecret || !hasPublic || current.secretUnreadable && !parsed.data.yocoSecretKey && current.yocoSecretSource !== "environment")) {
+    return {
+      error: "Add the Yoco public key and secret key before enabling card payments.",
+      fieldErrors: { yocoSecretKey: "A secret key is required." },
+    };
+  }
+
+  const values = {
+    yocoEnabled: parsed.data.yocoEnabled,
+    eftEnabled: parsed.data.eftEnabled,
+    yocoPublicKey: current.yocoPublicSource === "environment" ? row.yocoPublicKey : parsed.data.yocoPublicKey,
+    yocoSecretKey: secretStored,
+    yocoWebhookSecret: webhookStored,
+    bankAccountName: parsed.data.eftEnabled ? parsed.data.bankAccountName : parsed.data.bankAccountName,
+    bankName: parsed.data.bankName,
+    bankAccountNumber: parsed.data.bankAccountNumber,
+    bankBranchCode: parsed.data.bankBranchCode,
+    bankAccountType: parsed.data.bankAccountType,
+    updatedAt: new Date(),
+  };
+
+  try {
+    await getDb()
+      .insert(paymentSettings)
+      .values({ id: "default", ...values })
+      .onConflictDoUpdate({ target: paymentSettings.id, set: values });
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error(error instanceof Error ? error.message : "save payment settings failed");
+    return { error: "Could not save payment settings." };
+  }
+
+  refresh();
+  return { ok: "Payment settings saved" };
+}
+
+export async function markOrderPaid(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const orderId = String(formData.get("orderId") ?? "");
+  if (!isUuid(orderId)) return { error: "Order not found." };
+
+  const db = getDb();
+  const [row] = await db
+    .select({ order: orders, email: users.email, name: users.name })
+    .from(orders)
+    .innerJoin(users, eq(orders.userId, users.id))
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { error: "Order not found." };
+  if (row.order.paymentStatus === "paid") return { error: "This order is already marked paid." };
+
+  const title = `Payment received for order #${row.order.orderNumber}`;
+  const body = `Payment for order #${row.order.orderNumber} has been marked as received.`;
+  try {
+    const email = await sendCustomerEmail({
+      to: row.email,
+      subject: title,
+      text: `Hello ${row.name},\n\n${body}\n\nView the order: ${orderLink(orderId)}`,
+    });
+    await db.transaction(async (tx) => {
+      await tx
+        .update(orders)
+        .set({ paymentStatus: "paid", updatedAt: new Date() })
+        .where(eq(orders.id, orderId));
+      await tx.insert(notifications).values({
+        userId: row.order.userId,
+        orderId,
+        title,
+        body,
+        emailStatus: email.status,
+      });
+    });
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error(error instanceof Error ? error.message : "mark paid failed");
+    return { error: "Could not mark the order paid." };
+  }
+
+  refresh();
+  return { ok: "Payment marked as paid" };
 }
 
 export async function updateOrder(_prev: ActionState, formData: FormData): Promise<ActionState> {

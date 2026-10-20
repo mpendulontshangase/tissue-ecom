@@ -73,7 +73,7 @@ export default function HomePage() {
         {[
           ["1", "Choose the carton", "24 boxes or 48. Add as many cartons as you have room for."],
           ["2", "Tell us where", "A delivery address and phone number. Notes if a guard or reception must sign."],
-          ["3", "Pay when it is real", "Pay on delivery, or EFT after we confirm. Nothing is charged online."],
+          ["3", "Pay by card or EFT", "Card payments are confirmed by Yoco. An EFT stays awaiting payment until it is marked paid."],
         ].map(([step, title, copy]) => (
           <article key={step} className="rounded-3xl border border-line bg-foam p-5">
             <p className="font-serif text-3xl text-clay">{step}</p>
@@ -92,7 +92,7 @@ async function HeroCopy() {
   return (
     <div className="mt-5 max-w-xl">
       <p className="text-base leading-7 text-bark sm:text-lg">
-        {settings.shopName} packs 2-ply facial tissue into cartons of 24 and 48 boxes. Order one carton or a storeroom’s worth. Pay the driver, or pay by EFT once we confirm.
+            {settings.shopName} packs 2-ply facial tissue into cartons of 24 and 48 boxes. Order one carton or a storeroom’s worth. Pay by card with Yoco, or by EFT.
       </p>
       {settings.contactPhone || settings.contactEmail ? (
         <p className="mt-3 text-sm leading-6 text-ink">

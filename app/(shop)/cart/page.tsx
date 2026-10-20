@@ -92,7 +92,7 @@ async function CartBody() {
                 <dd>{formatZar(subtotal + fee)}</dd>
               </div>
             </dl>
-            <p className="mt-3 text-xs leading-5 text-bark">Delivery is R85, and free from R800. You pay on delivery or by EFT.</p>
+            <p className="mt-3 text-xs leading-5 text-bark">Delivery is R85, and free from R800. Pay by card with Yoco, or by EFT.</p>
             <Link href="/checkout" className={`${buttonClass} mt-5 w-full`}>
               Checkout
             </Link>

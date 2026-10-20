@@ -12,6 +12,7 @@ const links = [
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/settings", label: "Shop settings" },
+  { href: "/admin/payments", label: "Payments" },
 ];
 
 export function AdminShell({

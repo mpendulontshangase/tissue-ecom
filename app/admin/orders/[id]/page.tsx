@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { EftDetails } from "@/components/eft-details";
 import { OrderUpdateForm } from "@/components/order-update-form";
 import { PaymentBadge, StatusBadge } from "@/components/status-badge";
 import { requireAdmin } from "@/lib/auth";
 import { getOrderForUser } from "@/lib/catalog";
 import { PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import { bankDetailsComplete, getPaymentConfig } from "@/lib/payment-config";
 import { formatWhen, formatZar, isUuid } from "@/lib/format";
 
 export const metadata = { title: "Order" };
@@ -18,6 +20,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
   const detail = await getOrderForUser(id, admin.id, true);
   if (!detail) notFound();
   const { order, customerName, customerEmail, items, updates } = detail;
+  const payments = order.paymentMethod === "eft" ? await getPaymentConfig() : null;
 
   return (
     <div>
@@ -47,8 +50,12 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
             </p>
             <p className="mt-2 text-bark">
               {PAYMENT_METHOD_LABELS[order.paymentMethod]}
-              {order.paymentReference ? ` · ${order.paymentReference}` : ""}
+              {order.paymentMethod === "pay_on_delivery" ? " · no longer offered for new orders" : ""}
+              {order.paymentMethod === "yoco" && order.paymentReference ? ` · ${order.paymentReference}` : ""}
             </p>
+            {payments && bankDetailsComplete(payments.bank) ? (
+              <EftDetails bank={payments.bank} orderNumber={order.orderNumber} />
+            ) : null}
             {order.notes ? <p className="mt-2">Note: {order.notes}</p> : null}
           </section>
           <section className="rounded-3xl border border-line bg-foam p-5">
@@ -86,7 +93,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
         <OrderUpdateForm
           orderId={order.id}
           status={order.status}
-          paymentPending={order.paymentStatus === "pending_payment"}
+          paymentPending={order.paymentStatus === "pending_payment" || order.paymentStatus === "failed"}
         />
       </div>
     </div>

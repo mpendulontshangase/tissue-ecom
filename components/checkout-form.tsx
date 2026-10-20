@@ -6,7 +6,13 @@ import { PROVINCES } from "@/lib/constants";
 import { buttonClass, inputClass, labelClass } from "@/lib/styles";
 import { initialActionState } from "@/lib/validation";
 
-export function CheckoutForm({ defaultName }: { defaultName: string }) {
+export function CheckoutForm({
+  defaultName,
+  methods,
+}: {
+  defaultName: string;
+  methods: ("yoco" | "eft")[];
+}) {
   const [state, action, pending] = useActionState(placeOrder, initialActionState);
 
   return (
@@ -58,18 +64,25 @@ export function CheckoutForm({ defaultName }: { defaultName: string }) {
       </label>
       <fieldset className="space-y-2 rounded-2xl border border-line bg-sand/60 p-4">
         <legend className="px-1 text-sm font-semibold">Payment</legend>
-        <label className="flex min-h-12 items-start gap-3 text-sm leading-6">
-          <input type="radio" name="paymentMethod" value="pay_on_delivery" defaultChecked className="mt-1" />
-          <span>
-            <strong>Pay on delivery.</strong> Have the amount ready for the driver. The order stays pending until it is delivered.
-          </span>
-        </label>
-        <label className="flex min-h-12 items-start gap-3 text-sm leading-6">
-          <input type="radio" name="paymentMethod" value="eft" className="mt-1" />
-          <span>
-            <strong>EFT.</strong> We send banking details when the order is confirmed. Payment stays pending until the owner marks it paid.
-          </span>
-        </label>
+        {methods.length === 0 ? (
+          <p className="text-sm leading-6 text-bark">Payment is not available yet. Contact the shop before placing an order.</p>
+        ) : null}
+        {methods.includes("yoco") ? (
+          <label className="flex min-h-12 items-start gap-3 text-sm leading-6">
+            <input type="radio" name="paymentMethod" value="yoco" defaultChecked={methods[0] === "yoco"} className="mt-1" />
+            <span>
+              <strong>Card with Yoco.</strong> You will be sent to Yoco to pay by card. The order stays awaiting payment until Yoco confirms it.
+            </span>
+          </label>
+        ) : null}
+        {methods.includes("eft") ? (
+          <label className="flex min-h-12 items-start gap-3 text-sm leading-6">
+            <input type="radio" name="paymentMethod" value="eft" defaultChecked={methods[0] === "eft"} className="mt-1" />
+            <span>
+              <strong>EFT.</strong> Banking details and the order number to use as the payment reference appear after you place the order. It stays awaiting payment until it is marked paid.
+            </span>
+          </label>
+        ) : null}
         <Field message={state.fieldErrors?.paymentMethod} />
       </fieldset>
       <label className="block">
@@ -82,7 +95,7 @@ export function CheckoutForm({ defaultName }: { defaultName: string }) {
           {state.error}
         </p>
       ) : null}
-      <button type="submit" className={`${buttonClass} w-full`} disabled={pending}>
+      <button type="submit" className={`${buttonClass} w-full`} disabled={pending || methods.length === 0}>
         {pending ? "Placing order…" : "Place order"}
       </button>
     </form>

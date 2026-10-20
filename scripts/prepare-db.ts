@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { hashPassword } from "../lib/password";
-import { productImages, products, shopSettings, users } from "../lib/db/schema";
+import { paymentSettings, productImages, products, shopSettings, users } from "../lib/db/schema";
 
 config({ path: ".env" });
 config({ path: ".env.local", override: true });
@@ -97,6 +97,15 @@ async function seed(db: ReturnType<typeof drizzle>) {
     .limit(1);
   if (!settings) {
     await db.insert(shopSettings).values({ id: "default", shopName: "Softmill" });
+  }
+
+  const [payments] = await db
+    .select({ id: paymentSettings.id })
+    .from(paymentSettings)
+    .where(eq(paymentSettings.id, "default"))
+    .limit(1);
+  if (!payments) {
+    await db.insert(paymentSettings).values({ id: "default", eftEnabled: true, yocoEnabled: false });
   }
 
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();

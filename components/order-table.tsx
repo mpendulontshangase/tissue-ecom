@@ -42,9 +42,10 @@ export function OrderTable({ rows, hrefFor }: { rows: OrderRow[]; hrefFor: (id: 
               </p>
             ) : null}
             <p className="mt-1 text-sm text-bark">{plural(Number(order.itemCount), "carton")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusBadge status={order.status} />
               <PaymentBadge status={order.paymentStatus} />
+              <span className="text-xs font-semibold text-bark">{PAYMENT_METHOD_LABELS[order.paymentMethod]}</span>
             </div>
             <Link href={hrefFor(order.id)} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-pine">
               View order
@@ -81,6 +82,7 @@ export function OrderTable({ rows, hrefFor }: { rows: OrderRow[]; hrefFor: (id: 
                 </td>
                 <td className="px-4 py-3">
                   <PaymentBadge status={order.paymentStatus} />
+                  <div className="mt-1 text-xs text-bark">{PAYMENT_METHOD_LABELS[order.paymentMethod]}</div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">{formatZar(order.totalCents)}</td>
                 <td className="px-4 py-3 text-right">

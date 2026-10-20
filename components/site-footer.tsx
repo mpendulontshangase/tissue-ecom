@@ -31,7 +31,7 @@ export async function SiteFooter() {
         </div>
         <div className="text-sm leading-7 text-foam/80">
           <p className="font-semibold text-foam">Payment</p>
-          <p>Pay on delivery, or EFT after we confirm the order. No card checkout yet.</p>
+          <p>Pay by card with Yoco, or by EFT. Card payments are confirmed by Yoco before an order is marked paid.</p>
           {hasContact ? (
             <div className="mt-4 text-foam">
               <p className="font-semibold">Contact</p>
