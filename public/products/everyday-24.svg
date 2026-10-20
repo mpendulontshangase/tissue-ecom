@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-label="Everyday carton of 24 tissue boxes">
+  <rect width="800" height="800" fill="#f6efe3"/>
+  <ellipse cx="400" cy="690" rx="220" ry="28" fill="#e3d6c4"/>
+  <g transform="translate(190 170)">
+    <path d="M40 120 L210 40 L420 120 L250 210 Z" fill="#fffdf8" stroke="#1b4a38" stroke-width="8"/>
+    <path d="M40 120 L40 430 L250 520 L250 210 Z" fill="#1b4a38"/>
+    <path d="M250 210 L250 520 L420 430 L420 120 Z" fill="#2f6a4f"/>
+    <path d="M70 250 C120 210 180 210 220 250 L220 360 C170 320 110 320 70 360 Z" fill="#fffdf8"/>
+    <path d="M145 230 C160 180 190 170 210 210 C180 200 155 210 145 230 Z" fill="#fffdf8"/>
+    <text x="92" y="470" fill="#fffdf8" font-family="Georgia, serif" font-size="72">24</text>
+    <text x="300" y="360" fill="#fffdf8" font-family="Georgia, serif" font-size="28" transform="rotate(90 320 360)">Softmill</text>
+  </g>
+</svg>
