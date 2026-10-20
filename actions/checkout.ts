@@ -4,6 +4,7 @@ import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { isForSale } from "@/lib/catalog";
 import { readCart, writeCart } from "@/lib/cart";
 import { deliveryFeeCents, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import { getDb } from "@/lib/db";
@@ -58,7 +59,7 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
       const priced = [];
       for (const line of lines) {
         const product = byId.get(line.productId);
-        if (!product || !product.active) {
+        if (!product || !isForSale(product)) {
           throw new CheckoutError("A carton in your cart is no longer available.");
         }
         if (product.stock < line.quantity) {

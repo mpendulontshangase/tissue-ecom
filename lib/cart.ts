@@ -6,6 +6,7 @@ import { asc, inArray } from "drizzle-orm";
 import { CART_COOKIE } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { products, type Product } from "@/lib/db/schema";
+import { mainImageMap } from "@/lib/images";
 
 export type CartLine = {
   productId: string;
@@ -54,7 +55,7 @@ export async function writeCart(lines: CartLine[]) {
 }
 
 export type CartDetail = {
-  product: Product;
+  product: Product & { mainImageId: string | null };
   quantity: number;
   lineTotalCents: number;
 };
@@ -74,13 +75,14 @@ export async function readCartDetails() {
     )
     .orderBy(asc(products.sortOrder));
 
+  const mains = await mainImageMap(rows.map((product) => product.id));
   const byId = new Map(rows.map((product) => [product.id, product]));
   const details: CartDetail[] = [];
   for (const line of lines) {
     const product = byId.get(line.productId);
     if (!product) continue;
     details.push({
-      product,
+      product: { ...product, mainImageId: mains.get(product.id) ?? null },
       quantity: line.quantity,
       lineTotalCents: product.priceCents * line.quantity,
     });

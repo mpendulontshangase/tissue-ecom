@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { updateOrder } from "@/actions/admin";
+import { toastMessage, useToast } from "@/components/toast";
 import { ORDER_STATUSES, STATUS_LABELS } from "@/lib/constants";
 import type { OrderStatus } from "@/lib/db/schema";
 import { buttonClass, inputClass, labelClass } from "@/lib/styles";
@@ -16,7 +17,13 @@ export function OrderUpdateForm({
   status: OrderStatus;
   paymentPending: boolean;
 }) {
-  const [state, action, pending] = useActionState(updateOrder, initialActionState);
+  const push = useToast();
+  const [state, action, pending] = useActionState(async (prev: typeof initialActionState, formData: FormData) => {
+    const next = await updateOrder(prev, formData);
+    const toast = toastMessage(next);
+    if (toast) push(toast.kind, toast.message);
+    return next;
+  }, initialActionState);
 
   return (
     <form action={action} className="space-y-4 rounded-3xl border border-line bg-foam p-4 sm:p-5">
@@ -55,7 +62,9 @@ export function OrderUpdateForm({
           {state.error}
         </p>
       ) : null}
-      {state.ok ? <p className="text-sm font-medium text-leaf">{state.ok}</p> : null}
+      {state.ok ? (
+        <p className="text-sm font-medium text-leaf">Order updated. The customer can see it under Notifications.</p>
+      ) : null}
       <button type="submit" className={`${buttonClass} w-full sm:w-auto`} disabled={pending}>
         {pending ? "Sending…" : "Save and notify"}
       </button>

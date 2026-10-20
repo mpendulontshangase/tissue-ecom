@@ -5,13 +5,24 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/actions/auth";
 
+import { ToastProvider } from "@/components/toast";
+
 const links = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/products", label: "Products" },
+  { href: "/admin/settings", label: "Shop settings" },
 ];
 
-export function AdminShell({ name, children }: { name: string; children: React.ReactNode }) {
+export function AdminShell({
+  name,
+  shopName,
+  children,
+}: {
+  name: string;
+  shopName: string;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [openPath, setOpenPath] = useState<string | null>(null);
   const open = openPath === pathname;
@@ -20,15 +31,23 @@ export function AdminShell({ name, children }: { name: string; children: React.R
     <div className="min-h-full lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="hidden border-r border-line bg-pine text-foam lg:flex lg:min-h-screen lg:flex-col lg:p-6">
         <Link href="/admin" className="font-serif text-2xl">
-          Softmill
+          {shopName}
         </Link>
         <p className="mt-1 text-sm text-foam/70">Owner</p>
         <nav className="mt-8 grid gap-1" aria-label="Owner">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="rounded-xl px-3 py-2 text-sm font-semibold hover:bg-white/10">
-              {link.label}
-            </Link>
-          ))}
+            {links.map((link) => {
+            const current = link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={current ? "page" : undefined}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold hover:bg-white/10 ${current ? "bg-white/10" : ""}`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
           <Link href="/" className="rounded-xl px-3 py-2 text-sm font-semibold hover:bg-white/10">
             View shop
           </Link>
@@ -50,7 +69,7 @@ export function AdminShell({ name, children }: { name: string; children: React.R
             <span aria-hidden="true">{open ? "×" : "☰"}</span>
           </button>
           <div className="min-w-0">
-            <p className="font-serif text-xl leading-none text-pine">Softmill</p>
+            <p className="truncate font-serif text-xl leading-none text-pine">{shopName}</p>
             <p className="truncate text-xs text-bark">{name}</p>
           </div>
         </header>
@@ -59,7 +78,11 @@ export function AdminShell({ name, children }: { name: string; children: React.R
             <ul className="space-y-1">
               {links.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="flex min-h-12 items-center rounded-xl px-3 font-semibold">
+                  <Link
+                    href={link.href}
+                    aria-current={pathname.startsWith(link.href) && (link.href !== "/admin" || pathname === "/admin") ? "page" : undefined}
+                    className="flex min-h-12 items-center rounded-xl px-3 font-semibold"
+                  >
                     {link.label}
                   </Link>
                 </li>
@@ -77,7 +100,9 @@ export function AdminShell({ name, children }: { name: string; children: React.R
             </ul>
           </nav>
         ) : null}
-        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-8">{children}</div>
+        <ToastProvider>
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-8">{children}</div>
+        </ToastProvider>
       </div>
     </div>
   );

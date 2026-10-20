@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, ilike, or, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, isNull, or, sql, sum } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   notifications,
@@ -9,19 +9,52 @@ import {
   products,
   users,
   type OrderStatus,
+  type Product,
 } from "@/lib/db/schema";
 import { isOrderStatus } from "@/lib/constants";
+import { mainImageMap } from "@/lib/images";
+
+export type ListedProduct = Product & { mainImageId: string | null };
+
+export function isForSale(product: { active: boolean; archivedAt: Date | null }) {
+  return product.active && product.archivedAt === null;
+}
+
+async function withMainImage<T extends { id: string }>(rows: T[]) {
+  const mains = await mainImageMap(rows.map((row) => row.id));
+  return rows.map((row) => ({ ...row, mainImageId: mains.get(row.id) ?? null }));
+}
 
 export async function listActiveProducts() {
-  return getDb()
+  const rows = await getDb()
     .select()
     .from(products)
-    .where(eq(products.active, true))
+    .where(and(eq(products.active, true), isNull(products.archivedAt)))
     .orderBy(asc(products.sortOrder), asc(products.name));
+  return withMainImage(rows);
 }
 
 export async function listAllProducts() {
   return getDb().select().from(products).orderBy(asc(products.sortOrder), asc(products.name));
+}
+
+export async function listProductsForAdmin() {
+  const rows = await listAllProducts();
+  const [withImages, counts] = await Promise.all([
+    withMainImage(rows),
+    getDb()
+      .select({ productId: orderItems.productId, value: count() })
+      .from(orderItems)
+      .groupBy(orderItems.productId),
+  ]);
+  const orderCounts = new Map<string, number>();
+  for (const row of counts) {
+    if (row.productId) orderCounts.set(row.productId, row.value);
+  }
+  return withImages.map((product) => ({
+    ...product,
+    orderCount: orderCounts.get(product.id) ?? 0,
+  }));
 }
 
 export async function getProductBySlug(slug: string) {

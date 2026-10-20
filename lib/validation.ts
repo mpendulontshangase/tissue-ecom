@@ -80,6 +80,55 @@ export function randsToCents(value: string) {
   return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
 }
 
+export function normalizeHttpsUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (!/^https:\/\/\S+$/i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeWhatsapp(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const phone = normalizePhone(trimmed);
+  if (phone) return `https://wa.me/27${phone.slice(1)}`;
+  return normalizeHttpsUrl(trimmed);
+}
+
+const optionalHttps = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => value === "" || normalizeHttpsUrl(value) !== null, "Enter an https:// link");
+
+export const shopSettingsSchema = z.object({
+  shopName: z.string().trim().min(2, "Enter the shop name").max(60),
+  contactPhone: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => value === "" || normalizePhone(value) !== null, "Enter a valid South African phone number"),
+  contactEmail: z.union([z.literal(""), z.email("Enter a valid email address")]),
+  facebookUrl: optionalHttps,
+  instagramUrl: optionalHttps,
+  tiktokUrl: optionalHttps,
+  whatsappUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine(
+      (value) => value === "" || normalizeWhatsapp(value) !== null,
+      "Enter a WhatsApp number or an https:// link",
+    ),
+  xUrl: optionalHttps,
+});
+
 export const productSchema = z.object({
   name: z.string().trim().min(2, "Enter a product name").max(80),
   slug: z
@@ -94,7 +143,6 @@ export const productSchema = z.object({
   sheetsPerUnit: z.coerce.number().int().min(1).max(1000),
   price: z.string().trim().min(1, "Enter a price in rand"),
   stock: z.coerce.number().int().min(0).max(1_000_000),
-  imageUrl: z.string().trim().max(2_000_000).optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999),
   active: z.boolean(),
 });

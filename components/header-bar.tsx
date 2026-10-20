@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/actions/auth";
 import type { UserRole } from "@/lib/db/schema";
+import { shopMark } from "@/lib/shop-public";
 
 type HeaderUser = { name: string; role: UserRole };
 
@@ -12,10 +13,12 @@ const linkClass =
   "flex min-h-12 items-center rounded-xl px-3 text-base font-semibold text-ink hover:bg-sand";
 
 export function HeaderBar({
+  shopName,
   user,
   cartCount,
   unread,
 }: {
+  shopName: string;
   user: HeaderUser | null;
   cartCount: number;
   unread: number;
@@ -47,9 +50,9 @@ export function HeaderBar({
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
         <Link href="/" className="flex min-w-0 items-center gap-2 font-serif text-2xl tracking-tight text-pine">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-pine text-sm text-foam" aria-hidden>
-            Sf
+            {shopMark(shopName)}
           </span>
-          <span className="truncate">Softmill</span>
+          <span className="truncate">{shopName}</span>
         </Link>
         <nav className="ml-4 hidden items-center gap-1 lg:flex" aria-label="Primary">
           {links.map((link) => (
@@ -136,7 +139,7 @@ export function HeaderBar({
 export function HeaderFallback() {
   return (
     <header className="sticky top-0 z-40 border-b border-line/80 bg-paper">
-      <div className="mx-auto flex h-16 max-w-6xl items-center px-4 font-serif text-2xl text-pine">Softmill</div>
+      <div className="mx-auto flex h-16 max-w-6xl items-center px-4 font-serif text-2xl text-pine">Shop</div>
     </header>
   );
 }

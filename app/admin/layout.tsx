@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { AdminShell } from "@/components/admin-shell";
 import { requireAdmin } from "@/lib/auth";
+import { getShopSettings } from "@/lib/settings";
 
 export const metadata = { title: "Owner" };
 export const instant = false;
@@ -16,6 +17,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 async function AdminGate({ children }: { children: React.ReactNode }) {
   await connection();
-  const user = await requireAdmin();
-  return <AdminShell name={user.name}>{children}</AdminShell>;
+  const [user, settings] = await Promise.all([requireAdmin(), getShopSettings()]);
+  return (
+    <AdminShell name={user.name} shopName={settings.shopName}>
+      {children}
+    </AdminShell>
+  );
 }

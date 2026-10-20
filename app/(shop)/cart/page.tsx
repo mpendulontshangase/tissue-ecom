@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { CartLineEditor } from "@/components/cart-line";
+import { NoImage } from "@/components/no-image";
 import { readCartDetails } from "@/lib/cart";
+import { productImageSrc } from "@/lib/image-limits";
 import { deliveryFeeCents } from "@/lib/constants";
 import { formatZar } from "@/lib/format";
 import { buttonClass } from "@/lib/styles";
@@ -39,10 +41,12 @@ async function CartBody() {
             {lines.map((line) => (
               <li key={line.product.id} className="rounded-3xl border border-line bg-foam p-4 sm:p-5">
                 <div className="flex gap-4">
-                  {line.product.imageUrl ? (
+                  {line.product.mainImageId ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={line.product.imageUrl} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
-                  ) : null}
+                    <img src={productImageSrc(line.product.mainImageId)} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
+                  ) : (
+                    <NoImage className="h-20 w-20 shrink-0 rounded-2xl" label={`No image for ${line.product.name}`} />
+                  )}
                   <div className="min-w-0">
                     <h2 className="font-serif text-2xl">
                       <Link href={`/products/${line.product.slug}`}>{line.product.name}</Link>
@@ -50,7 +54,9 @@ async function CartBody() {
                     <p className="text-sm text-bark">
                       Carton of {line.product.packSize} · {formatZar(line.product.priceCents)} each
                     </p>
-                    {!line.product.active ? <p className="text-sm text-clay">This carton is no longer for sale.</p> : null}
+                    {!line.product.active || line.product.archivedAt ? (
+                      <p className="text-sm text-clay">This carton is no longer for sale.</p>
+                    ) : null}
                     {line.quantity > line.product.stock ? (
                       <p className="text-sm text-clay">Only {line.product.stock} cartons are left. Lower the quantity.</p>
                     ) : null}

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
@@ -14,7 +15,9 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
       <main id="main" className="flex-1">
         {children}
       </main>
-      <SiteFooter />
+      <Suspense fallback={<footer className="mt-16 h-48 border-t border-line bg-pine" />}>
+        <SiteFooter />
+      </Suspense>
     </div>
   );
 }

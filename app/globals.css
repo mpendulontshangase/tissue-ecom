@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
   --color-paper: #f3eee4;
   --color-foam: #fffdf8;
   --color-ink: #1b2620;

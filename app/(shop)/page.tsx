@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
+import { NoImage } from "@/components/no-image";
 import { ProductCard } from "@/components/product-card";
 import { listActiveProducts } from "@/lib/catalog";
+import { productImageSrc } from "@/lib/image-limits";
+import { getShopSettings } from "@/lib/settings";
 import { buttonClass, buttonSecondaryClass } from "@/lib/styles";
 
 export default function HomePage() {
@@ -14,9 +17,9 @@ export default function HomePage() {
           <h1 className="mt-3 max-w-xl font-serif text-[2.6rem] leading-[1.02] tracking-tight sm:text-6xl">
             Cartons of tissue, ready when the box runs out.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-7 text-bark sm:text-lg">
-            Softmill packs 2-ply facial tissue into cartons of 24 and 48 boxes. Order one carton or a storeroom’s worth. Pay the driver, or pay by EFT once we confirm.
-          </p>
+          <Suspense fallback={<p className="mt-5 max-w-xl text-base leading-7 text-bark sm:text-lg">Loading the shop…</p>}>
+            <HeroCopy />
+          </Suspense>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Link href="/products" className={`${buttonClass} w-full sm:w-auto`}>
               Shop cartons
@@ -83,6 +86,33 @@ export default function HomePage() {
   );
 }
 
+async function HeroCopy() {
+  await connection();
+  const settings = await getShopSettings();
+  return (
+    <div className="mt-5 max-w-xl">
+      <p className="text-base leading-7 text-bark sm:text-lg">
+        {settings.shopName} packs 2-ply facial tissue into cartons of 24 and 48 boxes. Order one carton or a storeroom’s worth. Pay the driver, or pay by EFT once we confirm.
+      </p>
+      {settings.contactPhone || settings.contactEmail ? (
+        <p className="mt-3 text-sm leading-6 text-ink">
+          {settings.contactPhone ? (
+            <a className="font-semibold text-pine" href={`tel:${settings.contactPhone}`}>
+              {settings.contactPhone}
+            </a>
+          ) : null}
+          {settings.contactPhone && settings.contactEmail ? <span aria-hidden="true"> · </span> : null}
+          {settings.contactEmail ? (
+            <a className="font-semibold text-pine" href={`mailto:${settings.contactEmail}`}>
+              {settings.contactEmail}
+            </a>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 async function HeroCartons() {
   await connection();
   const products = await listActiveProducts();
@@ -90,10 +120,12 @@ async function HeroCartons() {
     <ul className="grid gap-3 sm:grid-cols-2">
       {products.map((product) => (
         <li key={product.id} className="overflow-hidden rounded-2xl bg-sand">
-          {product.imageUrl ? (
+          {product.mainImageId ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.imageUrl} alt="" className="aspect-square w-full object-cover" />
-          ) : null}
+            <img src={productImageSrc(product.mainImageId)} alt="" className="aspect-square w-full object-cover" />
+          ) : (
+            <NoImage className="aspect-square w-full" label={`No image for ${product.name}`} />
+          )}
           <p className="px-3 py-3 text-sm font-semibold">
             {product.packSize} boxes
           </p>

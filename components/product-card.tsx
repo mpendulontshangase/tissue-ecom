@@ -1,18 +1,19 @@
 import Link from "next/link";
+import { NoImage } from "@/components/no-image";
 import type { Product } from "@/lib/db/schema";
 import { formatZar } from "@/lib/format";
+import { productImageSrc } from "@/lib/image-limits";
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: Product & { mainImageId: string | null } }) {
   const perBox = product.priceCents / product.packSize;
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-foam shadow-sm">
       <Link href={`/products/${product.slug}`} className="block bg-sand">
-        {product.imageUrl ? (
-          // Product art is an SVG or an owner-supplied URL, including data URLs.
+        {product.mainImageId ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.imageUrl} alt="" className="aspect-[5/4] w-full object-cover" />
+          <img src={productImageSrc(product.mainImageId)} alt="" className="aspect-[5/4] w-full object-cover" />
         ) : (
-          <div className="grid aspect-[5/4] place-items-center font-serif text-3xl text-pine">Softmill</div>
+          <NoImage className="aspect-[5/4] w-full" label={`No image for ${product.name}`} />
         )}
       </Link>
       <div className="flex flex-1 flex-col p-5">

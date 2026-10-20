@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { AddToCartForm } from "@/components/add-to-cart-form";
-import { getProductBySlug } from "@/lib/catalog";
+import { ProductGallery } from "@/components/product-gallery";
+import { getProductBySlug, isForSale } from "@/lib/catalog";
 import { formatZar } from "@/lib/format";
+import { listProductImageMeta } from "@/lib/images";
 
 export const metadata = { title: "Carton" };
 
@@ -20,19 +22,13 @@ async function ProductDetail({ params }: { params: Promise<{ slug: string }> }) 
   await connection();
   const { slug } = await params;
   const product = await getProductBySlug(slug);
-  if (!product || !product.active) notFound();
+  if (!product || !isForSale(product)) notFound();
+  const images = await listProductImageMeta(product.id);
   const perBox = product.priceCents / product.packSize;
 
   return (
     <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-2 lg:py-12">
-      <div className="overflow-hidden rounded-[2rem] border border-line bg-sand">
-        {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.imageUrl} alt={`${product.name}, carton of ${product.packSize}`} className="aspect-square w-full object-cover" />
-        ) : (
-          <div className="grid aspect-square place-items-center font-serif text-4xl text-pine">Softmill</div>
-        )}
-      </div>
+      <ProductGallery name={product.name} images={images} />
       <div>
         <p className="text-sm font-semibold text-leaf">
           <Link href="/products" className="hover:underline">

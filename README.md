@@ -29,6 +29,10 @@ Copy `.env.example` to `.env.local`. Never commit real secrets.
 | `NEXT_PUBLIC_APP_URL` | No | Public URL for links inside emails. |
 | `SEED_RESET_ADMIN_PASSWORD` | No | Set to `true` for one deploy to overwrite the owner password. |
 
+Product pictures are stored in Postgres (`product_images`) and served from `/api/images/[id]`. That works with `npm run dev` against a local database and on Vercel’s read-only filesystem. No extra image environment variable is required.
+
+Shop name, phone, email, and social links live in the `shop_settings` row. The seed creates it with the name Softmill and does not overwrite later edits. Change them under **Shop settings** in the owner sidebar.
+
 Generate a secret:
 
 ```bash
@@ -47,7 +51,9 @@ npm run db:prepare
 npm run dev
 ```
 
-`db:prepare` migrates and seeds. It upserts the Everyday (24) and Household (48) cartons. It creates the owner when `ADMIN_EMAIL` does not exist yet, and promotes that email to admin if it already signed up as a customer. The password is not changed on later runs unless `SEED_RESET_ADMIN_PASSWORD=true`.
+`db:prepare` migrates and seeds. It upserts the Everyday (24) and Household (48) cartons, and stores their starter pictures in the database when a product has none yet. It creates the owner when `ADMIN_EMAIL` does not exist yet, and promotes that email to admin if it already signed up as a customer. The password is not changed on later runs unless `SEED_RESET_ADMIN_PASSWORD=true`. It also inserts the shop settings row (name Softmill) if that row is missing.
+
+On an existing database, run `npm run db:prepare` again after pulling. It applies new migrations, including product pictures and shop settings, without wiping orders.
 
 Open [http://localhost:3000](http://localhost:3000). The owner desk is at `/admin`.
 

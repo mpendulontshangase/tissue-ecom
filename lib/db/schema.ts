@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   pgEnum,
@@ -9,6 +10,23 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value: Buffer) {
+    return value;
+  },
+  fromDriver(value: unknown) {
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    if (typeof value === "string") {
+      return value.startsWith("\\x") ? Buffer.from(value.slice(2), "hex") : Buffer.from(value, "binary");
+    }
+    return Buffer.alloc(0);
+  },
+});
 
 export const userRole = pgEnum("user_role", ["customer", "admin"]);
 
@@ -65,8 +83,38 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const productImages = pgTable(
+  "product_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    mimeType: text("mime_type").notNull(),
+    bytes: bytea("bytes").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isMain: boolean("is_main").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("product_images_product_id_idx").on(table.productId)],
+);
+
+export const shopSettings = pgTable("shop_settings", {
+  id: text("id").primaryKey().default("default"),
+  shopName: text("shop_name").notNull().default("Softmill"),
+  contactPhone: text("contact_phone").notNull().default(""),
+  contactEmail: text("contact_email").notNull().default(""),
+  facebookUrl: text("facebook_url").notNull().default(""),
+  instagramUrl: text("instagram_url").notNull().default(""),
+  tiktokUrl: text("tiktok_url").notNull().default(""),
+  whatsappUrl: text("whatsapp_url").notNull().default(""),
+  xUrl: text("x_url").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -145,6 +193,8 @@ export const notifications = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
+export type ProductImage = typeof productImages.$inferSelect;
+export type ShopSettings = typeof shopSettings.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
