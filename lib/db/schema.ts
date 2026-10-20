@@ -1,14 +1,33 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value: Buffer) {
+    return value;
+  },
+  fromDriver(value: unknown) {
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    if (typeof value === "string") {
+      return value.startsWith("\\x") ? Buffer.from(value.slice(2), "hex") : Buffer.from(value, "binary");
+    }
+    return Buffer.alloc(0);
+  },
+});
 
 export const userRole = pgEnum("user_role", ["customer", "admin"]);
 
@@ -28,7 +47,7 @@ export const paymentStatus = pgEnum("payment_status", [
   "refunded",
 ]);
 
-export const paymentMethod = pgEnum("payment_method", ["pay_on_delivery", "eft"]);
+export const paymentMethod = pgEnum("payment_method", ["pay_on_delivery", "eft", "yoco"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -65,8 +84,38 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const productImages = pgTable(
+  "product_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    mimeType: text("mime_type").notNull(),
+    bytes: bytea("bytes").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isMain: boolean("is_main").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("product_images_product_id_idx").on(table.productId)],
+);
+
+export const shopSettings = pgTable("shop_settings", {
+  id: text("id").primaryKey().default("default"),
+  shopName: text("shop_name").notNull().default("Softmill"),
+  contactPhone: text("contact_phone").notNull().default(""),
+  contactEmail: text("contact_email").notNull().default(""),
+  facebookUrl: text("facebook_url").notNull().default(""),
+  instagramUrl: text("instagram_url").notNull().default(""),
+  tiktokUrl: text("tiktok_url").notNull().default(""),
+  whatsappUrl: text("whatsapp_url").notNull().default(""),
+  xUrl: text("x_url").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -86,6 +135,7 @@ export const orders = pgTable(
     paymentStatus: paymentStatus("payment_status").notNull().default("pending_payment"),
     paymentProvider: text("payment_provider").notNull(),
     paymentReference: text("payment_reference"),
+    yocoCheckoutId: text("yoco_checkout_id"),
     subtotalCents: integer("subtotal_cents").notNull(),
     deliveryFeeCents: integer("delivery_fee_cents").notNull(),
     totalCents: integer("total_cents").notNull(),
@@ -104,7 +154,36 @@ export const orders = pgTable(
     index("orders_user_id_idx").on(table.userId),
     index("orders_status_idx").on(table.status),
     index("orders_created_at_idx").on(table.createdAt),
+    index("orders_yoco_checkout_id_idx").on(table.yocoCheckoutId),
   ],
+);
+
+export const paymentSettings = pgTable("payment_settings", {
+  id: text("id").primaryKey().default("default"),
+  yocoEnabled: boolean("yoco_enabled").notNull().default(false),
+  eftEnabled: boolean("eft_enabled").notNull().default(true),
+  yocoPublicKey: text("yoco_public_key").notNull().default(""),
+  yocoSecretKey: text("yoco_secret_key").notNull().default(""),
+  yocoWebhookSecret: text("yoco_webhook_secret").notNull().default(""),
+  bankAccountName: text("bank_account_name").notNull().default(""),
+  bankName: text("bank_name").notNull().default(""),
+  bankAccountNumber: text("bank_account_number").notNull().default(""),
+  bankBranchCode: text("bank_branch_code").notNull().default(""),
+  bankAccountType: text("bank_account_type").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const paymentEvents = pgTable(
+  "payment_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull(),
+    eventId: text("event_id").notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    eventType: text("event_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("payment_events_provider_event_id_unique").on(table.provider, table.eventId)],
 );
 
 export const orderItems = pgTable(
@@ -145,6 +224,9 @@ export const notifications = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
+export type ProductImage = typeof productImages.$inferSelect;
+export type ShopSettings = typeof shopSettings.$inferSelect;
+export type PaymentSettings = typeof paymentSettings.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { EftDetails } from "@/components/eft-details";
 import { PaymentBadge, StatusBadge } from "@/components/status-badge";
 import { requireUser } from "@/lib/auth";
 import { getOrderForUser } from "@/lib/catalog";
 import { PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import { bankDetailsComplete, getPaymentConfig } from "@/lib/payment-config";
 import { formatWhen, formatZar, isUuid } from "@/lib/format";
 
 export const metadata = { title: "Order" };
@@ -24,6 +26,7 @@ export default async function OrderDetailPage({
   const detail = await getOrderForUser(id, user.id, user.role === "admin");
   if (!detail) notFound();
   const { order, items, updates } = detail;
+  const payments = order.paymentMethod === "eft" ? await getPaymentConfig() : null;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -38,7 +41,7 @@ export default async function OrderDetailPage({
       <p className="mt-2 text-sm text-bark">{formatWhen(order.createdAt)}</p>
       {query.placed === "1" ? (
         <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-          Order received. Payment is pending — {PAYMENT_METHOD_LABELS[order.paymentMethod].toLowerCase()}.
+          Order received. Payment is awaiting confirmation — {PAYMENT_METHOD_LABELS[order.paymentMethod]}.
         </p>
       ) : null}
 
@@ -88,11 +91,11 @@ export default async function OrderDetailPage({
         </p>
         <p className="mt-3 text-bark">
           {PAYMENT_METHOD_LABELS[order.paymentMethod]}
-          {order.paymentReference ? ` · ${order.paymentReference}` : ""}
+          {order.paymentMethod === "pay_on_delivery" ? " · this method is no longer offered" : ""}
         </p>
         {order.notes ? <p className="mt-2">Note: {order.notes}</p> : null}
-        {order.paymentMethod === "eft" && order.paymentStatus === "pending_payment" ? (
-          <p className="mt-3 text-bark">Banking details arrive with the confirmation update. Do not pay before then.</p>
+        {payments && bankDetailsComplete(payments.bank) ? (
+          <EftDetails bank={payments.bank} orderNumber={order.orderNumber} />
         ) : null}
       </section>
 

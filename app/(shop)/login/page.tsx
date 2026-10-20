@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
 import { getCurrentUser } from "@/lib/auth";
 import { safeNextPath } from "@/lib/format";
+import { getShopSettings } from "@/lib/settings";
 
 export const metadata = { title: "Log in" };
 
@@ -18,7 +19,7 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ ne
 
 async function LoginBody({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   await connection();
-  const user = await getCurrentUser();
+  const [user, settings] = await Promise.all([getCurrentUser(), getShopSettings()]);
   const params = await searchParams;
   const nextPath = safeNextPath(params.next, "/account/orders");
   if (user) redirect(nextPath);
@@ -26,7 +27,7 @@ async function LoginBody({ searchParams }: { searchParams: Promise<{ next?: stri
   return (
     <div className="mx-auto max-w-md px-4 py-10 sm:py-14">
       <h1 className="font-serif text-4xl tracking-tight">Log in</h1>
-      <p className="mt-2 text-sm leading-6 text-bark">Use the email and password for your Softmill account.</p>
+      <p className="mt-2 text-sm leading-6 text-bark">Use the email and password for your {settings.shopName} account.</p>
       <div className="mt-6 rounded-3xl border border-line bg-foam p-5">
         <AuthForm mode="login" nextPath={nextPath} />
       </div>

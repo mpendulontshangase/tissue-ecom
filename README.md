@@ -1,6 +1,6 @@
 # Softmill
 
-A small ecommerce site for a tissue business that sells facial-tissue cartons of 24 and 48 boxes. Customers order in bulk, pay on delivery or by EFT, and follow the order in the app. The owner confirms orders, changes status, and sends updates.
+A small ecommerce site for a tissue business that sells facial-tissue cartons of 24 and 48 boxes. Customers order in bulk, pay by card with Yoco or by EFT, and follow the order in the app. The owner confirms orders, changes status, and sends updates.
 
 Prices are in South African rand (ZAR).
 
@@ -12,7 +12,7 @@ Prices are in South African rand (ZAR).
 - Email + password accounts, scrypt password hashes, signed httpOnly session cookies
 - Optional email through [Resend](https://resend.com)
 
-`postgres` (postgres.js) talks to both local Postgres and Neon. Use Neon’s **pooled** connection string on Vercel and keep `prepare` disabled (the app already does). Card payments are not wired up. `lib/payments.ts` is the place to add PayFast, Paystack, or Stripe later.
+`postgres` (postgres.js) talks to both local Postgres and Neon. Use Neon’s **pooled** connection string on Vercel and keep `prepare` disabled (the app already does). Card payments use the Yoco Checkout API. EFT uses the bank details saved under Payments.
 
 ## Environment variables
 
@@ -28,6 +28,14 @@ Copy `.env.example` to `.env.local`. Never commit real secrets.
 | `EMAIL_FROM` | No | From address Resend is allowed to send as. |
 | `NEXT_PUBLIC_APP_URL` | No | Public URL for links inside emails. |
 | `SEED_RESET_ADMIN_PASSWORD` | No | Set to `true` for one deploy to overwrite the owner password. |
+| `YOCO_PUBLIC_KEY` | No | Overrides the Yoco public key saved under Payments. |
+| `YOCO_SECRET_KEY` | No | Overrides the Yoco secret key. Never shown in the browser. |
+| `YOCO_WEBHOOK_SECRET` | No | Overrides the Yoco webhook secret (`whsec_...`). Never shown in the browser. |
+| `PAYMENT_ENCRYPTION_KEY` | No | Encrypts Yoco secrets in Postgres. `AUTH_SECRET` is used when this is empty. |
+
+Product pictures are stored in Postgres (`product_images`) and served from `/api/images/[id]`. That works with `npm run dev` against a local database and on Vercel’s read-only filesystem. No extra image environment variable is required.
+
+Shop name, phone, email, and social links live in the `shop_settings` row. The seed creates it with the name Softmill and does not overwrite later edits. Change them under **Shop settings** in the owner sidebar.
 
 Generate a secret:
 
@@ -47,9 +55,11 @@ npm run db:prepare
 npm run dev
 ```
 
-`db:prepare` migrates and seeds. It upserts the Everyday (24) and Household (48) cartons. It creates the owner when `ADMIN_EMAIL` does not exist yet, and promotes that email to admin if it already signed up as a customer. The password is not changed on later runs unless `SEED_RESET_ADMIN_PASSWORD=true`.
+`db:prepare` migrates and seeds. It upserts the Everyday (24) and Household (48) cartons, and stores their starter pictures in the database when a product has none yet. It creates the owner when `ADMIN_EMAIL` does not exist yet, and promotes that email to admin if it already signed up as a customer. The password is not changed on later runs unless `SEED_RESET_ADMIN_PASSWORD=true`. It also inserts the shop settings row (name Softmill) if that row is missing.
 
-Open [http://localhost:3000](http://localhost:3000). The owner desk is at `/admin`.
+On an existing database, run `npm run db:prepare` again after pulling. It applies new migrations, including product pictures, shop settings, and payments, without wiping orders. Older pay-on-delivery orders stay in the database and still display as pay on delivery.
+
+Open [http://localhost:3001](http://localhost:3001). The owner desk is at `/admin`.
 
 ## Deploying on Vercel
 
@@ -70,7 +80,23 @@ If you change the password in the database, keep using the new password. Set `SE
 
 ## Order flow
 
-Customers sign up, add cartons (the quantity field accepts up to the stock on hand, with shortcuts for 5, 10, 20, and 50), and check out with a delivery address. The order is stored as **pending** with payment **pending**. The owner filters orders, changes status (`pending`, `confirmed`, `processing`, `out for delivery`, `delivered`, `cancelled`), and writes a message. The message is always saved in the customer’s Updates page. Email is sent only when Resend is configured.
+Customers sign up, add cartons (the quantity field accepts up to the stock on hand, with shortcuts for 5, 10, 20, and 50), and check out with a delivery address. Checkout offers Yoco card payment and EFT, and hides a method the owner has switched off. At least one method stays enabled. The order is stored as **pending** and **awaiting payment**.
+
+An EFT order shows the bank account holder, bank, account number, branch code, account type, and the order number as the payment reference on the confirmation, the order page, and the order email. It stays awaiting payment until the owner uses **Mark as paid**. The customer gets an in-app notification.
+
+A Yoco order redirects to Yoco’s hosted page. The order is marked paid only after a signature-checked webhook, or after a server-side lookup of that checkout shows it completed. The browser redirect alone does not mark it paid. Yoco rejects amounts under R2.00.
+
+### Yoco setup
+
+1. In the Yoco App, open the Checkout API integration and copy the test public key and test secret key.
+2. In the owner desk, open **Payments**, paste the keys, and enable Yoco. The page shows Test mode or Live mode from the key prefix.
+3. Copy the webhook URL shown there and register it with Yoco (`POST https://payments.yoco.com/api/webhooks` with the secret key, or the webhook field in the Yoco dashboard). Save the `whsec_...` secret Yoco shows once into Payments. Yoco only calls a public `https` URL, so a tunnel is required for local webhook tests.
+4. Pay with a test card from the Yoco App’s test card details. Test payments do not appear on the live sales report.
+5. Before live payments, verify the shop domain in Yoco and replace the test keys with the live keys.
+
+`npm test` checks webhook signatures and a mocked checkout call without real keys.
+
+The owner filters orders, changes status (`pending`, `confirmed`, `processing`, `out for delivery`, `delivered`, `cancelled`), and writes a message. The message is always saved in the customer’s Updates page. Email is sent only when Resend is configured.
 
 Cancelling an order returns stock. Reopening a cancelled order reserves stock again when enough remains.
 

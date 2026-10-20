@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { MarkReadOnView } from "@/components/mark-read";
 import { requireUser } from "@/lib/auth";
 import { listNotifications } from "@/lib/catalog";
+import { getShopSettings } from "@/lib/settings";
 import { formatWhen } from "@/lib/format";
 
 export const metadata = { title: "Updates" };
@@ -10,7 +11,7 @@ export const metadata = { title: "Updates" };
 export default async function NotificationsPage() {
   await connection();
   const user = await requireUser("/account/notifications");
-  const items = await listNotifications(user.id);
+  const [items, settings] = await Promise.all([listNotifications(user.id), getShopSettings()]);
   const unread = items.some((item) => item.readAt === null);
 
   return (
@@ -22,7 +23,7 @@ export default async function NotificationsPage() {
       </p>
       {items.length === 0 ? (
         <p className="mt-8 rounded-3xl border border-dashed border-line bg-foam p-6 text-bark">
-          Nothing yet. When Softmill updates an order, it will show up here.
+          Nothing yet. When {settings.shopName} updates an order, it will show up here.
         </p>
       ) : (
         <ol className="mt-6 space-y-3">

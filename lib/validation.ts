@@ -62,8 +62,55 @@ export const checkoutSchema = z.object({
   province: z.enum(PROVINCES, { error: "Choose a province" }),
   postalCode: z.string().trim().regex(/^\d{4}$/, "Enter a 4-digit postal code"),
   notes: z.string().trim().max(500, "Keep notes under 500 characters").optional(),
-  paymentMethod: z.enum(["pay_on_delivery", "eft"], { error: "Choose how you will pay" }),
+  paymentMethod: z.enum(["yoco", "eft"], { error: "Choose how you will pay" }),
 });
+
+export const BANK_ACCOUNT_TYPES = ["Cheque", "Savings", "Transmission"] as const;
+
+export const paymentSettingsSchema = z
+  .object({
+    yocoEnabled: z.boolean(),
+    eftEnabled: z.boolean(),
+    yocoPublicKey: z.string().trim().max(200),
+    yocoSecretKey: z.string().trim().max(300),
+    yocoWebhookSecret: z.string().trim().max(300),
+    bankAccountName: z.string().trim().max(80),
+    bankName: z.string().trim().max(80),
+    bankAccountNumber: z.string().trim().max(20),
+    bankBranchCode: z.string().trim().max(10),
+    bankAccountType: z.string().trim().max(40),
+  })
+  .superRefine((value, context) => {
+    if (!value.yocoEnabled && !value.eftEnabled) {
+      context.addIssue({ code: "custom", path: ["eftEnabled"], message: "Keep Yoco or EFT enabled." });
+    }
+    if (value.yocoEnabled && value.yocoPublicKey && !/^pk_(test|live)_/.test(value.yocoPublicKey)) {
+      context.addIssue({ code: "custom", path: ["yocoPublicKey"], message: "Public key should start with pk_test_ or pk_live_." });
+    }
+    if (value.yocoSecretKey && !/^sk_(test|live)_/.test(value.yocoSecretKey)) {
+      context.addIssue({ code: "custom", path: ["yocoSecretKey"], message: "Secret key should start with sk_test_ or sk_live_." });
+    }
+    if (value.yocoWebhookSecret && !value.yocoWebhookSecret.startsWith("whsec_")) {
+      context.addIssue({ code: "custom", path: ["yocoWebhookSecret"], message: "Webhook secret should start with whsec_." });
+    }
+    if (value.eftEnabled) {
+      if (value.bankAccountName.length < 2) {
+        context.addIssue({ code: "custom", path: ["bankAccountName"], message: "Enter the account holder." });
+      }
+      if (value.bankName.length < 2) {
+        context.addIssue({ code: "custom", path: ["bankName"], message: "Enter the bank name." });
+      }
+      if (!/^\d{6,16}$/.test(value.bankAccountNumber)) {
+        context.addIssue({ code: "custom", path: ["bankAccountNumber"], message: "Enter the account number, digits only." });
+      }
+      if (!/^\d{6}$/.test(value.bankBranchCode)) {
+        context.addIssue({ code: "custom", path: ["bankBranchCode"], message: "Enter the 6-digit branch code." });
+      }
+      if (!(BANK_ACCOUNT_TYPES as readonly string[]).includes(value.bankAccountType)) {
+        context.addIssue({ code: "custom", path: ["bankAccountType"], message: "Choose the account type." });
+      }
+    }
+  });
 
 export function normalizePhone(value: string) {
   const compact = value.replace(/[\s()-]/g, "");
@@ -80,6 +127,55 @@ export function randsToCents(value: string) {
   return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
 }
 
+export function normalizeHttpsUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (!/^https:\/\/\S+$/i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeWhatsapp(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const phone = normalizePhone(trimmed);
+  if (phone) return `https://wa.me/27${phone.slice(1)}`;
+  return normalizeHttpsUrl(trimmed);
+}
+
+const optionalHttps = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => value === "" || normalizeHttpsUrl(value) !== null, "Enter an https:// link");
+
+export const shopSettingsSchema = z.object({
+  shopName: z.string().trim().min(2, "Enter the shop name").max(60),
+  contactPhone: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => value === "" || normalizePhone(value) !== null, "Enter a valid South African phone number"),
+  contactEmail: z.union([z.literal(""), z.email("Enter a valid email address")]),
+  facebookUrl: optionalHttps,
+  instagramUrl: optionalHttps,
+  tiktokUrl: optionalHttps,
+  whatsappUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine(
+      (value) => value === "" || normalizeWhatsapp(value) !== null,
+      "Enter a WhatsApp number or an https:// link",
+    ),
+  xUrl: optionalHttps,
+});
+
 export const productSchema = z.object({
   name: z.string().trim().min(2, "Enter a product name").max(80),
   slug: z
@@ -94,7 +190,6 @@ export const productSchema = z.object({
   sheetsPerUnit: z.coerce.number().int().min(1).max(1000),
   price: z.string().trim().min(1, "Enter a price in rand"),
   stock: z.coerce.number().int().min(0).max(1_000_000),
-  imageUrl: z.string().trim().max(2_000_000).optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999),
   active: z.boolean(),
 });

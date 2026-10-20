@@ -21,10 +21,11 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   pay_on_delivery: "Pay on delivery",
   eft: "EFT",
+  yoco: "Card (Yoco)",
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
-  pending_payment: "Pending payment",
+  pending_payment: "Awaiting payment",
   paid: "Paid",
   failed: "Failed",
   refunded: "Refunded",

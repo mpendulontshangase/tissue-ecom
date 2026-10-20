@@ -5,6 +5,7 @@ import { CheckoutForm } from "@/components/checkout-form";
 import { getCurrentUser } from "@/lib/auth";
 import { readCartDetails } from "@/lib/cart";
 import { deliveryFeeCents } from "@/lib/constants";
+import { checkoutMethods } from "@/lib/payment-config";
 import { formatZar } from "@/lib/format";
 import { redirect } from "next/navigation";
 
@@ -22,7 +23,7 @@ async function CheckoutBody() {
   await connection();
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/checkout");
-  const lines = await readCartDetails();
+  const [lines, methods] = await Promise.all([readCartDetails(), checkoutMethods()]);
   if (lines.length === 0) redirect("/cart");
   const subtotal = lines.reduce((total, line) => total + line.lineTotalCents, 0);
   const fee = deliveryFeeCents(subtotal);
@@ -32,10 +33,10 @@ async function CheckoutBody() {
       <div>
         <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Checkout</h1>
         <p className="mt-3 text-sm leading-6 text-bark">
-          Ordering as {user.email}. Payment stays pending until delivery or until an EFT is marked paid.
+          Ordering as {user.email}. Pay by card with Yoco, or by EFT. The order stays awaiting payment until the payment is confirmed.
         </p>
         <div className="mt-6">
-          <CheckoutForm defaultName={user.name} />
+          <CheckoutForm defaultName={user.name} methods={methods} />
         </div>
       </div>
       <aside className="h-fit rounded-3xl border border-line bg-foam p-5">

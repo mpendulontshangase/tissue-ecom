@@ -4,13 +4,16 @@ import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { isForSale } from "@/lib/catalog";
 import { readCart, writeCart } from "@/lib/cart";
 import { deliveryFeeCents, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { notifications, orderItems, orders, products } from "@/lib/db/schema";
 import { orderLink, sendCustomerEmail } from "@/lib/email";
 import { formatZar } from "@/lib/format";
-import { paymentAdapterFor } from "@/lib/payments";
+import { checkoutMethods, eftInstructions, getPaymentConfig } from "@/lib/payment-config";
+import { publicBaseUrl } from "@/lib/public-url";
+import { createYocoCheckout } from "@/lib/yoco";
 import {
   checkoutSchema,
   fieldErrorsFrom,
@@ -41,11 +44,21 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
   const lines = await readCart();
   if (lines.length === 0) return { error: "Your cart is empty." };
 
-  let orderId = "";
+  const methods = await checkoutMethods();
+  if (!methods.includes(parsed.data.paymentMethod)) {
+    return { error: "That payment method is not available." };
+  }
+
+  let placed: {
+    id: string;
+    orderNumber: number;
+    totalCents: number;
+    items: { name: string; quantity: number; priceCents: number }[];
+  } | null = null;
 
   try {
     const db = getDb();
-    orderId = await db.transaction(async (tx) => {
+    placed = await db.transaction(async (tx) => {
       const ids = lines.map((line) => line.productId).sort();
       const locked = await tx
         .select()
@@ -58,7 +71,7 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
       const priced = [];
       for (const line of lines) {
         const product = byId.get(line.productId);
-        if (!product || !product.active) {
+        if (!product || !isForSale(product)) {
           throw new CheckoutError("A carton in your cart is no longer available.");
         }
         if (product.stock < line.quantity) {
@@ -82,7 +95,7 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
           userId: user.id,
           paymentMethod: parsed.data.paymentMethod,
           paymentStatus: "pending_payment",
-          paymentProvider: parsed.data.paymentMethod,
+          paymentProvider: parsed.data.paymentMethod === "yoco" ? "yoco" : "eft",
           subtotalCents,
           deliveryFeeCents: fee,
           totalCents,
@@ -98,21 +111,12 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
         .returning();
       if (!order) throw new CheckoutError("Could not create the order.");
 
-      const payment = await paymentAdapterFor(parsed.data.paymentMethod).start({
-        method: parsed.data.paymentMethod,
-        amountCents: totalCents,
-        orderNumber: order.orderNumber,
-        customerEmail: user.email,
-      });
-
-      await tx
-        .update(orders)
-        .set({
-          paymentProvider: payment.provider,
-          paymentStatus: payment.paymentStatus,
-          paymentReference: payment.reference,
-        })
-        .where(eq(orders.id, order.id));
+      if (parsed.data.paymentMethod === "eft") {
+        await tx
+          .update(orders)
+          .set({ paymentReference: String(order.orderNumber) })
+          .where(eq(orders.id, order.id));
+      }
 
       await tx.insert(orderItems).values(
         priced.map((line) => ({
@@ -142,22 +146,16 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
         }
       }
 
-      const title = `Order #${order.orderNumber} received`;
-      const body = `We have your order for ${formatZar(totalCents)}. Payment is pending (${PAYMENT_METHOD_LABELS[parsed.data.paymentMethod]}). We will confirm it before delivery.`;
-      const email = await sendCustomerEmail({
-        to: user.email,
-        subject: title,
-        text: `${body}\n\nView the order: ${orderLink(order.id)}`,
-      });
-      await tx.insert(notifications).values({
-        userId: user.id,
-        orderId: order.id,
-        title,
-        body,
-        emailStatus: email.status,
-      });
-
-      return order.id;
+      return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        totalCents,
+        items: priced.map((line) => ({
+          name: line.product.name,
+          quantity: line.quantity,
+          priceCents: line.product.priceCents,
+        })),
+      };
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -166,7 +164,93 @@ export async function placeOrder(_prev: ActionState, formData: FormData): Promis
     return { error: "Could not place the order. Please try again." };
   }
 
+  if (!placed) return { error: "Could not place the order. Please try again." };
+
+  try {
+    if (parsed.data.paymentMethod === "yoco") {
+      const config = await getPaymentConfig();
+      const base = await publicBaseUrl();
+      if (!base) throw new CheckoutError("Set NEXT_PUBLIC_APP_URL before taking card payments.");
+      const checkout = await createYocoCheckout({
+        secretKey: config.yocoSecretKey,
+        amountCents: placed.totalCents,
+        orderId: placed.id,
+        orderNumber: placed.orderNumber,
+        successUrl: `${base}/checkout/yoco/return?order=${placed.id}&result=success`,
+        cancelUrl: `${base}/checkout/yoco/return?order=${placed.id}&result=cancel`,
+        failureUrl: `${base}/checkout/yoco/return?order=${placed.id}&result=failure`,
+        lineItems: placed.items.map((item) => ({
+          displayName: item.name,
+          quantity: item.quantity,
+          priceCents: item.priceCents,
+        })),
+      });
+      await getDb()
+        .update(orders)
+        .set({ yocoCheckoutId: checkout.id, paymentReference: checkout.id, updatedAt: new Date() })
+        .where(eq(orders.id, placed.id));
+      await notifyPlaced(user, placed.id, placed.orderNumber, placed.totalCents, "yoco");
+      await writeCart([]);
+      revalidatePath("/", "layout");
+      redirect(checkout.redirectUrl);
+    }
+
+    const config = await getPaymentConfig();
+    await notifyPlaced(user, placed.id, placed.orderNumber, placed.totalCents, "eft", eftInstructions(config.bank, placed.orderNumber));
+  } catch (error) {
+    unstable_rethrow(error);
+    await undoOrder(placed.id);
+    if (error instanceof CheckoutError) return { error: error.message };
+    console.error(error instanceof Error ? error.message : "payment start failed");
+    return { error: "Card payment could not be started. Nothing was charged, and the order was not kept." };
+  }
+
   await writeCart([]);
   revalidatePath("/", "layout");
-  redirect(`/account/orders/${orderId}?placed=1`);
+  redirect(`/account/orders/${placed.id}?placed=1`);
+}
+
+async function notifyPlaced(
+  user: { id: string; email: string; name: string },
+  orderId: string,
+  orderNumber: number,
+  totalCents: number,
+  method: "yoco" | "eft",
+  extra = "",
+) {
+  const title = `Order #${orderNumber} received`;
+  const body = [
+    `We have your order for ${formatZar(totalCents)}.`,
+    `Payment method: ${PAYMENT_METHOD_LABELS[method]}. The order is awaiting payment.`,
+    extra,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const email = await sendCustomerEmail({
+    to: user.email,
+    subject: title,
+    text: `Hello ${user.name},\n\n${body}\n\nView the order: ${orderLink(orderId)}`,
+  });
+  await getDb().insert(notifications).values({
+    userId: user.id,
+    orderId,
+    title,
+    body,
+    emailStatus: email.status,
+  });
+}
+
+async function undoOrder(orderId: string) {
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    for (const item of items) {
+      if (!item.productId) continue;
+      await tx
+        .update(products)
+        .set({ stock: sql`${products.stock} + ${item.quantity}`, updatedAt: new Date() })
+        .where(eq(products.id, item.productId));
+    }
+    await tx.delete(orders).where(eq(orders.id, orderId));
+  });
 }

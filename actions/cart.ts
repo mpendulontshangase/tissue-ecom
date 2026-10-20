@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getProductById } from "@/lib/catalog";
+import { getProductById, isForSale } from "@/lib/catalog";
 import { readCart, writeCart } from "@/lib/cart";
 import { quantitySchema, type ActionState } from "@/lib/validation";
 
@@ -16,7 +16,7 @@ export async function addToCart(_prev: ActionState, formData: FormData): Promise
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Enter a quantity" };
 
   const product = await getProductById(productId);
-  if (!product || !product.active) return { error: "That carton is not available." };
+  if (!product || !isForSale(product)) return { error: "That carton is not available." };
   if (product.stock < 1) return { error: "That carton is out of stock." };
 
   const lines = await readCart();

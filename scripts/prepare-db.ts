@@ -1,10 +1,12 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { config } from "dotenv";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { hashPassword } from "../lib/password";
-import { products, users } from "../lib/db/schema";
+import { paymentSettings, productImages, products, shopSettings, users } from "../lib/db/schema";
 
 config({ path: ".env" });
 config({ path: ".env.local", override: true });
@@ -50,6 +52,7 @@ async function seed(db: ReturnType<typeof drizzle>) {
       .where(eq(products.slug, product.slug))
       .limit(1);
 
+    let productId = existing?.id;
     if (existing) {
       await db
         .update(products)
@@ -60,13 +63,49 @@ async function seed(db: ReturnType<typeof drizzle>) {
           packSize: product.packSize,
           sheetsPerUnit: product.sheetsPerUnit,
           unitLabel: product.unitLabel,
-          imageUrl: product.imageUrl,
           sortOrder: product.sortOrder,
         })
         .where(eq(products.id, existing.id));
     } else {
-      await db.insert(products).values(product);
+      const [created] = await db.insert(products).values(product).returning({ id: products.id });
+      productId = created?.id;
     }
+
+    if (!productId) continue;
+    const [image] = await db
+      .select({ id: productImages.id })
+      .from(productImages)
+      .where(eq(productImages.productId, productId))
+      .limit(1);
+    if (image) continue;
+
+    const filePath = path.join(process.cwd(), "public", "products", `${product.slug}.svg`);
+    const bytes = await readFile(filePath);
+    await db.insert(productImages).values({
+      productId,
+      mimeType: "image/svg+xml",
+      bytes,
+      sortOrder: 0,
+      isMain: true,
+    });
+  }
+
+  const [settings] = await db
+    .select({ id: shopSettings.id })
+    .from(shopSettings)
+    .where(eq(shopSettings.id, "default"))
+    .limit(1);
+  if (!settings) {
+    await db.insert(shopSettings).values({ id: "default", shopName: "Softmill" });
+  }
+
+  const [payments] = await db
+    .select({ id: paymentSettings.id })
+    .from(paymentSettings)
+    .where(eq(paymentSettings.id, "default"))
+    .limit(1);
+  if (!payments) {
+    await db.insert(paymentSettings).values({ id: "default", eftEnabled: true, yocoEnabled: false });
   }
 
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
