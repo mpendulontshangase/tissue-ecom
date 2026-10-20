@@ -55,7 +55,7 @@ npm run dev
 
 On an existing database, run `npm run db:prepare` again after pulling. It applies new migrations, including product pictures and shop settings, without wiping orders.
 
-Open [http://localhost:3000](http://localhost:3000). The owner desk is at `/admin`.
+Open [http://localhost:3001](http://localhost:3001). The owner desk is at `/admin`.
 
 ## Deploying on Vercel
 
